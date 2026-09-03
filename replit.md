@@ -1,6 +1,6 @@
-# [Project name]
+# Finance Copilot
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Um copiloto financeiro doméstico que transforma movimentações, orçamento e metas em uma visão clara do que está acontecendo e do próximo passo.
 
 ## Run & Operate
 
@@ -22,23 +22,32 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/finance-copilot/src/App.tsx` — shell responsivo, dashboard e telas do MVP.
+- `artifacts/finance-copilot/src/index.css` — tokens visuais, tema claro/escuro e animações.
+- `artifacts/api-server/src/routes/finance.ts` — API do núcleo financeiro, cálculo de resumo e seed demo.
+- `lib/api-spec/openapi.yaml` — contrato único da API; hooks e schemas são gerados a partir dele.
+- `lib/db/src/schema/finance.ts` — tabelas Drizzle de contas, categorias, movimentações, metas, orçamento e cartões.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- O backend é a fonte dos cálculos financeiros; o frontend consome hooks tipados gerados pelo contrato OpenAPI.
+- O primeiro incremento usa um perfil demo persistido no PostgreSQL para manter o painel útil sem exigir autenticação antes do núcleo financeiro.
+- Resumos e análises rápidas ficam em endpoints agregados para evitar enviar o banco inteiro ao cliente.
+- O produto usa BRL e localização pt-BR desde a primeira experiência para refletir seu público doméstico brasileiro.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+O MVP oferece uma visão geral com patrimônio líquido, saldo disponível, saúde financeira, fluxo de caixa e atividade recente. Também inclui rotas para movimentações com busca/filtro e criação, contas, metas, orçamento, cartões, inteligência financeira e configurações.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+O prompt mestre do produto está preservado em `attached_assets/prompt_app_gestao_financeira_ia_1788396638145.md`.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Depois de alterar `lib/api-spec/openapi.yaml`, rode o codegen antes de usar hooks ou schemas novos.
+- Alterações no schema Drizzle exigem `pnpm --filter @workspace/db run push` no banco de desenvolvimento.
+- O servidor usa o caminho `/api`; o frontend acessa a API por URLs relativas ao proxy do artefato.
 
 ## Pointers
 

@@ -10,6 +10,20 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Financial overview
+  - name: accounts
+    description: Bank and wallet accounts
+  - name: categories
+    description: Transaction categories
+  - name: transactions
+    description: Income, expense and transfer movements
+  - name: goals
+    description: Savings goals
+  - name: budget
+    description: Monthly budget planning
+  - name: cards
+    description: Credit cards
 paths:
   /healthz:
     get:
@@ -24,6 +38,201 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Summary of the current financial month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Get recent activity
+      responses:
+        "200":
+          description: Recent movements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: List accounts
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Create an account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountInput"
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transactions
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [income, expense, transfer]
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+            maximum: 100
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Create a transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: List goals
+      responses:
+        "200":
+          description: Savings goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Goal"
+    post:
+      operationId: createGoal
+      tags: [goals]
+      summary: Create a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalInput"
+      responses:
+        "201":
+          description: Created goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+  /budget:
+    get:
+      operationId: getBudget
+      tags: [budget]
+      summary: Get current monthly budget
+      responses:
+        "200":
+          description: Current budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+    put:
+      operationId: updateBudget
+      tags: [budget]
+      summary: Update monthly budget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetInput"
+      responses:
+        "200":
+          description: Updated budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+  /cards:
+    get:
+      operationId: listCards
+      tags: [cards]
+      summary: List credit cards
+      responses:
+        "200":
+          description: Credit cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CreditCard"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +242,136 @@ components:
           type: string
       required:
         - status
+    Account:
+      type: object
+      required: [id, name, institution, kind, balance, color]
+      properties:
+        id: { type: number }
+        name: { type: string }
+        institution: { type: string }
+        kind: { type: string }
+        balance: { type: number }
+        color: { type: string }
+    AccountInput:
+      type: object
+      required: [name, institution, kind, balance, color]
+      properties:
+        name: { type: string, minLength: 1 }
+        institution: { type: string, minLength: 1 }
+        kind: { type: string, minLength: 1 }
+        balance: { type: number }
+        color: { type: string, minLength: 1 }
+    Category:
+      type: object
+      required: [id, name, color, icon, spent, budget]
+      properties:
+        id: { type: number }
+        name: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        spent: { type: number }
+        budget: { type: number }
+    Transaction:
+      type: object
+      required: [id, description, amount, type, category, account, date, status]
+      properties:
+        id: { type: number }
+        description: { type: string }
+        amount: { type: number }
+        type: { type: string, enum: [income, expense, transfer] }
+        category: { type: string }
+        account: { type: string }
+        date: { type: string }
+        status: { type: string }
+    TransactionInput:
+      type: object
+      required: [description, amount, type, category, account, date]
+      properties:
+        description: { type: string, minLength: 1 }
+        amount: { type: number, exclusiveMinimum: 0 }
+        type: { type: string, enum: [income, expense, transfer] }
+        category: { type: string, minLength: 1 }
+        account: { type: string, minLength: 1 }
+        date: { type: string, minLength: 1 }
+    Goal:
+      type: object
+      required: [id, name, target, current, deadline, color]
+      properties:
+        id: { type: number }
+        name: { type: string }
+        target: { type: number }
+        current: { type: number }
+        deadline: { type: string }
+        color: { type: string }
+    GoalInput:
+      type: object
+      required: [name, target, current, deadline, color]
+      properties:
+        name: { type: string, minLength: 1 }
+        target: { type: number, exclusiveMinimum: 0 }
+        current: { type: number, minimum: 0 }
+        deadline: { type: string, minLength: 1 }
+        color: { type: string, minLength: 1 }
+    BudgetLine:
+      type: object
+      required: [category, planned, spent, color]
+      properties:
+        category: { type: string }
+        planned: { type: number }
+        spent: { type: number }
+        color: { type: string }
+    Budget:
+      type: object
+      required: [month, planned, spent, lines]
+      properties:
+        month: { type: string }
+        planned: { type: number }
+        spent: { type: number }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetLine" }
+    BudgetInput:
+      type: object
+      required: [month, planned, lines]
+      properties:
+        month: { type: string, minLength: 1 }
+        planned: { type: number, minimum: 0 }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetLine" }
+    CreditCard:
+      type: object
+      required: [id, name, institution, limit, used, closingDay, dueDay, color]
+      properties:
+        id: { type: number }
+        name: { type: string }
+        institution: { type: string }
+        limit: { type: number }
+        used: { type: number }
+        closingDay: { type: number }
+        dueDay: { type: number }
+        color: { type: string }
+    DashboardSummary:
+      type: object
+      required: [netWorth, available, income, expenses, investments, bills, savingsRate, healthScore, healthLabel, monthlyChange, cashFlow]
+      properties:
+        netWorth: { type: number }
+        available: { type: number }
+        income: { type: number }
+        expenses: { type: number }
+        investments: { type: number }
+        bills: { type: number }
+        savingsRate: { type: number }
+        healthScore: { type: number }
+        healthLabel: { type: string }
+        monthlyChange: { type: number }
+        cashFlow:
+          type: array
+          items:
+            type: object
+            required: [month, income, expenses]
+            properties:
+              month: { type: string }
+              income: { type: number }
+              expenses: { type: number }
 

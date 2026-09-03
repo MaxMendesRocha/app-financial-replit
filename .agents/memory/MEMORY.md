@@ -1,0 +1,1 @@
+- [Finance Copilot foundation](finance-copilot-foundation.md) — keep deterministic financial calculations authoritative as AI capabilities expand.
