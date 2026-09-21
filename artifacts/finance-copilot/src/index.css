@@ -5,6 +5,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Clerk's appearance classes live in its own layer; these states keep the
+   branded auth controls readable in both development and production builds. */
+.cl-formButtonPrimary { color: #fff !important; }
+.cl-socialButtonsBlockButtonText { color: #263e39 !important; }
+.cl-formFieldInput { color: #263e39 !important; }
+.cl-formFieldInput::placeholder { color: #72817d !important; opacity: 1; }
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

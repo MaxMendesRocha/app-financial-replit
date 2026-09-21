@@ -62,62 +62,87 @@ const serializeGoal = (row: typeof goalsTable.$inferSelect) => ({
   color: row.color,
 });
 
-async function seedDemoData() {
-  const existing = await db.select({ id: accountsTable.id }).from(accountsTable).limit(1);
-  if (existing.length > 0) return;
+const seededUsers = new Set<string>();
+const seedingUsers = new Map<string, Promise<void>>();
 
-  await db.insert(accountsTable).values([
-    { name: "Nubank", institution: "Nubank", kind: "Conta digital", balance: "8420.38", color: "#7856D6" },
-    { name: "Itaú", institution: "Itaú", kind: "Conta corrente", balance: "28960.10", color: "#F07845" },
-    { name: "Carteira", institution: "Dinheiro", kind: "Carteira", balance: "380.00", color: "#28A878" },
-  ]);
-  await db.insert(categoriesTable).values([
-    { name: "Moradia", color: "#7856D6", icon: "home", budget: "2500" },
-    { name: "Alimentação", color: "#F07845", icon: "utensils", budget: "1500" },
-    { name: "Transporte", color: "#4C9BE8", icon: "car", budget: "800" },
-    { name: "Lazer", color: "#E1B12C", icon: "sparkles", budget: "900" },
-    { name: "Assinaturas", color: "#D85C9E", icon: "repeat", budget: "300" },
-    { name: "Investimentos", color: "#28A878", icon: "trending-up", budget: "1800" },
-  ]);
-  await db.insert(transactionsTable).values([
-    { description: "Salário mensal", amount: "12000", type: "income", category: "Receita", account: "Nubank", date: currentMonth + "-05", status: "completed" },
-    { description: "Aluguel", amount: "2450", type: "expense", category: "Moradia", account: "Nubank", date: currentMonth + "-06", status: "completed" },
-    { description: "Mercado Pão de Açúcar", amount: "386.42", type: "expense", category: "Alimentação", account: "Itaú", date: currentMonth + "-08", status: "completed" },
-    { description: "Aporte mensal", amount: "1800", type: "expense", category: "Investimentos", account: "Itaú", date: currentMonth + "-10", status: "completed" },
-    { description: "Uber", amount: "48.90", type: "expense", category: "Transporte", account: "Nubank", date: currentMonth + "-11", status: "completed" },
-    { description: "Netflix", amount: "55.90", type: "expense", category: "Assinaturas", account: "Nubank", date: currentMonth + "-12", status: "completed" },
-    { description: "Restaurante Maré", amount: "164.80", type: "expense", category: "Alimentação", account: "Nubank", date: currentMonth + "-13", status: "completed" },
-    { description: "Freelance de design", amount: "2400", type: "income", category: "Receita", account: "Itaú", date: currentMonth + "-14", status: "completed" },
-  ]);
-  await db.insert(goalsTable).values([
-    { name: "Reserva de emergência", target: "30000", current: "18450", deadline: "2026-12-31", color: "#7856D6" },
-    { name: "Viagem para o Chile", target: "8500", current: "5200", deadline: "2026-10-15", color: "#E1B12C" },
-    { name: "Entrada do carro", target: "40000", current: "12400", deadline: "2027-08-30", color: "#4C9BE8" },
-  ]);
-  await db.insert(budgetsTable).values({
-    month: currentMonth,
-    planned: "7800",
-    lines: [
-      { category: "Moradia", planned: 2500, spent: 2450, color: "#7856D6" },
-      { category: "Alimentação", planned: 1500, spent: 1120, color: "#F07845" },
-      { category: "Transporte", planned: 800, spent: 420, color: "#4C9BE8" },
-      { category: "Lazer", planned: 900, spent: 620, color: "#E1B12C" },
-      { category: "Assinaturas", planned: 300, spent: 180, color: "#D85C9E" },
-      { category: "Investimentos", planned: 1800, spent: 1800, color: "#28A878" },
-    ],
-  });
-  await db.insert(cardsTable).values([
-    { name: "Nubank Platinum", institution: "Nubank", limit: "12000", used: "3160.80", closingDay: 12, dueDay: 20, color: "#7856D6" },
-    { name: "Visa Infinite", institution: "Itaú", limit: "18000", used: "4280.25", closingDay: 5, dueDay: 13, color: "#F07845" },
-  ]);
+async function seedDemoData(userId: string) {
+  if (seededUsers.has(userId)) return;
+  const inFlight = seedingUsers.get(userId);
+  if (inFlight) return inFlight;
+
+  const seed = (async () => {
+    const existing = await db.select({ id: accountsTable.id }).from(accountsTable).where(eq(accountsTable.userId, userId)).limit(1);
+    if (existing.length > 0) {
+      seededUsers.add(userId);
+      return;
+    }
+
+    const [existingCategory] = await db.select({ id: categoriesTable.id }).from(categoriesTable).limit(1);
+    if (!existingCategory) {
+      await db.insert(categoriesTable).values([
+        { name: "Moradia", color: "#7856D6", icon: "home", budget: "2500" },
+        { name: "Alimentação", color: "#F07845", icon: "utensils", budget: "1500" },
+        { name: "Transporte", color: "#4C9BE8", icon: "car", budget: "800" },
+        { name: "Lazer", color: "#E1B12C", icon: "sparkles", budget: "900" },
+        { name: "Assinaturas", color: "#D85C9E", icon: "repeat", budget: "300" },
+        { name: "Investimentos", color: "#28A878", icon: "trending-up", budget: "1800" },
+      ]);
+    }
+    await db.insert(accountsTable).values([
+      { userId, name: "Nubank", institution: "Nubank", kind: "Conta digital", balance: "8420.38", color: "#7856D6" },
+      { userId, name: "Itaú", institution: "Itaú", kind: "Conta corrente", balance: "28960.10", color: "#F07845" },
+      { userId, name: "Carteira", institution: "Dinheiro", kind: "Carteira", balance: "380.00", color: "#28A878" },
+    ]);
+    await db.insert(transactionsTable).values([
+      { userId, description: "Salário mensal", amount: "12000", type: "income", category: "Receita", account: "Nubank", date: currentMonth + "-05", status: "completed" },
+      { userId, description: "Aluguel", amount: "2450", type: "expense", category: "Moradia", account: "Nubank", date: currentMonth + "-06", status: "completed" },
+      { userId, description: "Mercado Pão de Açúcar", amount: "386.42", type: "expense", category: "Alimentação", account: "Itaú", date: currentMonth + "-08", status: "completed" },
+      { userId, description: "Aporte mensal", amount: "1800", type: "expense", category: "Investimentos", account: "Itaú", date: currentMonth + "-10", status: "completed" },
+      { userId, description: "Uber", amount: "48.90", type: "expense", category: "Transporte", account: "Nubank", date: currentMonth + "-11", status: "completed" },
+      { userId, description: "Netflix", amount: "55.90", type: "expense", category: "Assinaturas", account: "Nubank", date: currentMonth + "-12", status: "completed" },
+      { userId, description: "Restaurante Maré", amount: "164.80", type: "expense", category: "Alimentação", account: "Nubank", date: currentMonth + "-13", status: "completed" },
+      { userId, description: "Freelance de design", amount: "2400", type: "income", category: "Receita", account: "Itaú", date: currentMonth + "-14", status: "completed" },
+    ]);
+    await db.insert(goalsTable).values([
+      { userId, name: "Reserva de emergência", target: "30000", current: "18450", deadline: "2026-12-31", color: "#7856D6" },
+      { userId, name: "Viagem para o Chile", target: "8500", current: "5200", deadline: "2026-10-15", color: "#E1B12C" },
+      { userId, name: "Entrada do carro", target: "40000", current: "12400", deadline: "2027-08-30", color: "#4C9BE8" },
+    ]);
+    await db.insert(budgetsTable).values({
+      userId,
+      month: currentMonth,
+      planned: "7800",
+      lines: [
+        { category: "Moradia", planned: 2500, spent: 2450, color: "#7856D6" },
+        { category: "Alimentação", planned: 1500, spent: 1120, color: "#F07845" },
+        { category: "Transporte", planned: 800, spent: 420, color: "#4C9BE8" },
+        { category: "Lazer", planned: 900, spent: 620, color: "#E1B12C" },
+        { category: "Assinaturas", planned: 300, spent: 180, color: "#D85C9E" },
+        { category: "Investimentos", planned: 1800, spent: 1800, color: "#28A878" },
+      ],
+    });
+    await db.insert(cardsTable).values([
+      { userId, name: "Nubank Platinum", institution: "Nubank", limit: "12000", used: "3160.80", closingDay: 12, dueDay: 20, color: "#7856D6" },
+      { userId, name: "Visa Infinite", institution: "Itaú", limit: "18000", used: "4280.25", closingDay: 5, dueDay: 13, color: "#F07845" },
+    ]);
+    seededUsers.add(userId);
+  })();
+
+  seedingUsers.set(userId, seed);
+  try {
+    await seed;
+  } finally {
+    seedingUsers.delete(userId);
+  }
 }
 
-router.get("/dashboard/summary", async (_req, res) => {
-  await seedDemoData();
+router.get("/dashboard/summary", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const [accounts, transactions, goals] = await Promise.all([
-    db.select().from(accountsTable),
-    db.select().from(transactionsTable),
-    db.select().from(goalsTable),
+    db.select().from(accountsTable).where(eq(accountsTable.userId, userId)),
+    db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId)),
+    db.select().from(goalsTable).where(eq(goalsTable.userId, userId)),
   ]);
   const currentTransactions = transactions.filter((item) => item.date.startsWith(currentMonth));
   const income = currentTransactions.filter((item) => item.type === "income").reduce((sum, item) => sum + asNumber(item.amount), 0);
@@ -147,31 +172,36 @@ router.get("/dashboard/summary", async (_req, res) => {
   res.json(GetDashboardSummaryResponse.parse(response));
 });
 
-router.get("/dashboard/activity", async (_req, res) => {
-  await seedDemoData();
-  const rows = await db.select().from(transactionsTable).orderBy(desc(transactionsTable.date), desc(transactionsTable.id)).limit(6);
+router.get("/dashboard/activity", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
+  const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId)).orderBy(desc(transactionsTable.date), desc(transactionsTable.id)).limit(6);
   res.json(GetDashboardActivityResponse.parse(rows.map(serializeTransaction)));
 });
 
-router.get("/accounts", async (_req, res) => {
-  await seedDemoData();
-  res.json(ListAccountsResponse.parse((await db.select().from(accountsTable)).map(serializeAccount)));
+router.get("/accounts", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
+  res.json(ListAccountsResponse.parse((await db.select().from(accountsTable).where(eq(accountsTable.userId, userId))).map(serializeAccount)));
 });
 
 router.post("/accounts", async (req, res) => {
-  await seedDemoData();
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const body = CreateAccountBody.parse(req.body);
   const [account] = await db.insert(accountsTable).values({
+    userId,
     ...body,
     balance: String(body.balance),
   }).returning();
   res.status(201).json(serializeAccount(account));
 });
 
-router.get("/categories", async (_req, res) => {
-  await seedDemoData();
+router.get("/categories", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const categories = await db.select().from(categoriesTable);
-  const expenses = await db.select().from(transactionsTable);
+  const expenses = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId));
   const data = categories.map((category) => ({
     id: category.id,
     name: category.name,
@@ -184,11 +214,18 @@ router.get("/categories", async (_req, res) => {
 });
 
 router.get("/transactions", async (req, res) => {
-  await seedDemoData();
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const query = ListTransactionsQueryParams.parse(req.query);
-  const filters = [];
+  const filters = [eq(transactionsTable.userId, userId)];
   if (query.type) filters.push(eq(transactionsTable.type, query.type));
-  if (query.search) filters.push(or(ilike(transactionsTable.description, `%${query.search}%`), ilike(transactionsTable.category, `%${query.search}%`)));
+  if (query.search) {
+    const searchFilter = or(
+      ilike(transactionsTable.description, `%${query.search}%`),
+      ilike(transactionsTable.category, `%${query.search}%`),
+    );
+    if (searchFilter) filters.push(searchFilter);
+  }
   const rows = await db.select().from(transactionsTable)
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(desc(transactionsTable.date), desc(transactionsTable.id))
@@ -197,24 +234,29 @@ router.get("/transactions", async (req, res) => {
 });
 
 router.post("/transactions", async (req, res) => {
-  await seedDemoData();
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const body = CreateTransactionBody.parse(req.body);
   const [transaction] = await db.insert(transactionsTable).values({
+    userId,
     ...body,
     amount: String(body.amount),
   }).returning();
   res.status(201).json(serializeTransaction(transaction));
 });
 
-router.get("/goals", async (_req, res) => {
-  await seedDemoData();
-  res.json(ListGoalsResponse.parse((await db.select().from(goalsTable)).map(serializeGoal)));
+router.get("/goals", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
+  res.json(ListGoalsResponse.parse((await db.select().from(goalsTable).where(eq(goalsTable.userId, userId))).map(serializeGoal)));
 });
 
 router.post("/goals", async (req, res) => {
-  await seedDemoData();
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const body = CreateGoalBody.parse(req.body);
   const [goal] = await db.insert(goalsTable).values({
+    userId,
     ...body,
     target: String(body.target),
     current: String(body.current),
@@ -222,31 +264,35 @@ router.post("/goals", async (req, res) => {
   res.status(201).json(serializeGoal(goal));
 });
 
-router.get("/budget", async (_req, res) => {
-  await seedDemoData();
-  const [budget] = await db.select().from(budgetsTable).where(eq(budgetsTable.month, currentMonth)).limit(1);
+router.get("/budget", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
+  const [budget] = await db.select().from(budgetsTable).where(and(eq(budgetsTable.userId, userId), eq(budgetsTable.month, currentMonth))).limit(1);
   const data = { month: budget.month, planned: asNumber(budget.planned), spent: budget.lines.reduce((sum, line) => sum + line.spent, 0), lines: budget.lines };
   res.json(GetBudgetResponse.parse(data));
 });
 
 router.put("/budget", async (req, res) => {
-  await seedDemoData();
+  const userId = req.userId!;
+  await seedDemoData(userId);
   const body = UpdateBudgetBody.parse(req.body);
   const [budget] = await db.insert(budgetsTable).values({
+    userId,
     month: body.month,
     planned: String(body.planned),
     lines: body.lines,
   }).onConflictDoUpdate({
-    target: budgetsTable.month,
+    target: [budgetsTable.userId, budgetsTable.month],
     set: { planned: String(body.planned), lines: body.lines, updatedAt: new Date() },
   }).returning();
   const data = { month: budget.month, planned: asNumber(budget.planned), spent: budget.lines.reduce((sum, line) => sum + line.spent, 0), lines: budget.lines };
   res.json(GetBudgetResponse.parse(data));
 });
 
-router.get("/cards", async (_req, res) => {
-  await seedDemoData();
-  const cards = await db.select().from(cardsTable);
+router.get("/cards", async (req, res) => {
+  const userId = req.userId!;
+  await seedDemoData(userId);
+  const cards = await db.select().from(cardsTable).where(eq(cardsTable.userId, userId));
   res.json(ListCardsResponse.parse(cards.map((card) => ({
     id: card.id,
     name: card.name,

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   useCreateAccount,
@@ -56,11 +56,63 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { Link, Route, Switch, useLocation } from 'wouter';
+import { ClerkProvider, Show, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
+import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+if (!clerkPubKey) {
+  throw new Error('VITE_CLERK_PUBLISHABLE_KEY não foi configurada.');
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#286f61',
+    colorForeground: '#263e39',
+    colorMutedForeground: '#72817d',
+    colorDanger: '#b94b4b',
+    colorBackground: '#fbfaf6',
+    colorInput: '#ffffff',
+    colorInputForeground: '#263e39',
+    colorNeutral: '#d9dfd9',
+    fontFamily: 'DM Sans, sans-serif',
+    borderRadius: '1rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[#fbfaf6] rounded-3xl w-[440px] max-w-full overflow-hidden',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'font-display text-3xl text-[#263e39]',
+    headerSubtitle: 'text-[#72817d]',
+    socialButtonsBlockButtonText: '!text-[#263e39]',
+    formFieldLabel: 'text-[#263e39] font-semibold',
+    footerActionLink: '!text-[#286f61] font-semibold',
+    footerActionText: '!text-[#72817d]',
+    dividerText: 'text-[#72817d]',
+    formButtonPrimary: '!bg-[#286f61] hover:!bg-[#20594e] !text-white',
+    formFieldInput: 'border-[#d9dfd9] bg-white !text-[#263e39]',
+    dividerLine: 'bg-[#d9dfd9]',
+    main: 'bg-transparent',
+  },
+};
 
 const fallbackSummary = {
   netWorth: 84260,
@@ -123,13 +175,13 @@ const fallbackBudget = {
 };
 
 const nav = [
-  { href: '/', label: 'Visão geral', icon: LayoutDashboard },
-  { href: '/transactions', label: 'Movimentações', icon: ArrowLeftRight },
-  { href: '/accounts', label: 'Contas', icon: Wallet },
-  { href: '/goals', label: 'Metas', icon: Target },
-  { href: '/budget', label: 'Orçamento', icon: Grid2X2 },
-  { href: '/cards', label: 'Cartões', icon: CreditCard },
-  { href: '/insights', label: 'Inteligência', icon: Sparkles },
+  { href: '/app', label: 'Visão geral', icon: LayoutDashboard },
+  { href: '/app/transactions', label: 'Movimentações', icon: ArrowLeftRight },
+  { href: '/app/accounts', label: 'Contas', icon: Wallet },
+  { href: '/app/goals', label: 'Metas', icon: Target },
+  { href: '/app/budget', label: 'Orçamento', icon: Grid2X2 },
+  { href: '/app/cards', label: 'Cartões', icon: CreditCard },
+  { href: '/app/insights', label: 'Inteligência', icon: Sparkles },
 ];
 
 const transactionTypeLabels: Record<TransactionType | 'all', string> = {
@@ -228,15 +280,19 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pageName = location === '/' ? 'Bom dia, Sam' : nav.find((item) => item.href === location)?.label ?? 'Configurações';
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const firstName = user?.firstName || 'você';
+  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Sua conta';
+  const pageName = location === '/app' ? `Bom dia, ${firstName}` : nav.find((item) => item.href === location)?.label ?? 'Configurações';
   const today = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date());
   return <div className="noise min-h-[100dvh] bg-background text-foreground">
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-sidebar px-5 py-6 text-sidebar-foreground transition-transform duration-300 md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="mb-12 flex items-center justify-between px-2"><Link href="/" data-testid="link-brand" className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><TrendingUp className="h-5 w-5" /></span><span className="font-display text-xl tracking-tight">Finch</span></Link><button type="button" aria-label="Fechar menu" data-testid="button-close-nav" className="md:hidden" onClick={() => setMobileOpen(false)}><X className="h-5 w-5" /></button></div>
-      <nav className="space-y-1" aria-label="Navegação principal">{nav.map(({ href, label, icon: Icon }) => <Link href={href} key={href} data-testid={`link-nav-${label.toLowerCase()}`} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${location === href ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`}><Icon className="h-[18px] w-[18px]" /><span>{label}</span>{href === '/insights' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-sidebar-primary" />}</Link>)}</nav>
+      <div className="mb-12 flex items-center justify-between px-2"><Link href="/app" data-testid="link-brand" className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><TrendingUp className="h-5 w-5" /></span><span className="font-display text-xl tracking-tight">Finch</span></Link><button type="button" aria-label="Fechar menu" data-testid="button-close-nav" className="md:hidden" onClick={() => setMobileOpen(false)}><X className="h-5 w-5" /></button></div>
+      <nav className="space-y-1" aria-label="Navegação principal">{nav.map(({ href, label, icon: Icon }) => <Link href={href} key={href} data-testid={`link-nav-${label.toLowerCase()}`} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${location === href ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`}><Icon className="h-[18px] w-[18px]" /><span>{label}</span>{href === '/app/insights' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-sidebar-primary" />}</Link>)}</nav>
       <div className="mt-auto space-y-1">
-        <Link href="/settings" data-testid="link-nav-settings" className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm ${location === '/settings' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}><Settings2 className="h-[18px] w-[18px]" /><span>Configurações</span></Link>
-        <div className="mt-5 border-t border-sidebar-border pt-5"><div className="flex items-center gap-3 px-2"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground">SM</div><div className="min-w-0"><p className="truncate text-sm font-semibold">Sam Morgan</p><p className="truncate text-xs text-sidebar-foreground/50">Espaço pessoal</p></div><ChevronDown className="ml-auto h-4 w-4 opacity-50" /></div></div>
+        <Link href="/app/settings" data-testid="link-nav-settings" className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm ${location === '/app/settings' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}><Settings2 className="h-[18px] w-[18px]" /><span>Configurações</span></Link>
+        <div className="mt-5 border-t border-sidebar-border pt-5"><div className="flex items-center gap-3 px-2"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground">{displayName.slice(0, 2).toUpperCase()}</div><div className="min-w-0"><p className="truncate text-sm font-semibold">{displayName}</p><p className="truncate text-xs text-sidebar-foreground/50">Espaço pessoal</p></div><button type="button" aria-label="Sair da conta" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="ml-auto rounded-full p-1 hover:bg-sidebar-accent"><ChevronDown className="h-4 w-4 opacity-50" /></button></div></div>
       </div>
     </aside>
     {mobileOpen && <button type="button" aria-label="Fechar sobreposição do menu" data-testid="button-overlay-nav" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-primary/20 md:hidden" />}
@@ -364,12 +420,48 @@ function Settings() {
   return <div className="space-y-8"><SectionTitle eyebrow="Deixe do seu jeito" title="Configurações" body="Escolhas simples para definir como o Finch acompanha você todos os dias." /><div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]"><aside className="rounded-3xl border border-border bg-card p-3"><button type="button" data-testid="button-settings-profile" className="flex w-full items-center gap-3 rounded-2xl bg-accent/40 p-4 text-left"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">SM</div><div><p className="text-sm font-semibold">Perfil</p><p className="text-xs text-muted-foreground">Seus dados pessoais</p></div></button><button type="button" data-testid="button-settings-preferences" className="mt-1 flex w-full items-center gap-3 rounded-2xl p-4 text-left text-muted-foreground hover:bg-muted"><Settings2 className="ml-1 h-5 w-5" /><div><p className="text-sm font-semibold">Preferências</p><p className="text-xs text-muted-foreground">Como o app funciona</p></div></button><button type="button" data-testid="button-settings-notifications" className="mt-1 flex w-full items-center gap-3 rounded-2xl p-4 text-left text-muted-foreground hover:bg-muted"><Bell className="ml-1 h-5 w-5" /><div><p className="text-sm font-semibold">Notificações</p><p className="text-xs text-muted-foreground">Lembretes úteis, nunca excesso</p></div></button></aside><section className="rounded-3xl border border-border bg-card p-6 sm:p-8"><div className="flex items-center justify-between border-b border-border pb-6"><div><h2 className="font-display text-3xl">Perfil</h2><p className="mt-1 text-sm text-muted-foreground">É assim que vamos cumprimentar você.</p></div><div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground">SM</div></div><div className="mt-7 grid gap-5 sm:grid-cols-2"><Field label="Nome"><TextInput data-testid="input-settings-first-name" defaultValue="Sam" /></Field><Field label="Sobrenome"><TextInput data-testid="input-settings-last-name" defaultValue="Morgan" /></Field><Field label="E-mail"><TextInput data-testid="input-settings-email" type="email" defaultValue="sam@morgan.house" /></Field><Field label="Moeda principal"><select data-testid="select-settings-currency" className="w-full rounded-xl border border-input bg-card px-3.5 py-3 text-sm"><option>Real brasileiro (R$)</option><option>Dólar americano (US$)</option><option>Euro (€)</option></select></Field></div><div className="mt-9 border-t border-border pt-7"><h3 className="font-semibold">Aparência</h3><div className="mt-4 flex items-center justify-between rounded-2xl bg-muted/60 p-4"><div><p className="text-sm font-semibold">Leitura noturna</p><p className="mt-1 text-xs text-muted-foreground">Use uma paleta mais escura quando o sol se pôr.</p></div><button type="button" role="switch" aria-checked={dark} data-testid="button-toggle-theme" onClick={() => { setDark((value) => !value); document.documentElement.classList.toggle('dark'); }} className={`flex h-7 w-12 items-center rounded-full p-1 ${dark ? 'bg-primary justify-end' : 'bg-border justify-start'}`}><span className="h-5 w-5 rounded-full bg-card shadow-sm" /></button></div></div><div className="mt-8 flex items-center justify-end gap-3"><span className={`text-sm text-primary ${saved ? 'opacity-100' : 'opacity-0'}`}><Check className="mr-1 inline h-4 w-4" />Salvo</span><Button data-testid="button-save-settings" onClick={save}>Salvar alterações</Button></div></section></div></div>;
 }
 
-function Router() {
-  return <ErrorBoundary><Shell><Switch><Route path="/" component={Dashboard} /><Route path="/transactions" component={Transactions} /><Route path="/accounts" component={Accounts} /><Route path="/goals" component={Goals} /><Route path="/budget" component={Budget} /><Route path="/cards" component={Cards} /><Route path="/insights" component={Insights} /><Route path="/settings" component={Settings} /><Route component={NotFound} /></Switch></Shell></ErrorBoundary>;
+function LandingPage() {
+  return <main className="noise min-h-[100dvh] bg-background text-foreground"><header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6 lg:px-10"><Link href="/" className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><TrendingUp className="h-5 w-5" /></span><span className="font-display text-xl tracking-tight">Finch</span></Link><div className="flex items-center gap-3"><Link href="/sign-in" className="rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted">Entrar</Link><Link href="/sign-up" className="rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Criar conta</Link></div></header><section className="mx-auto grid max-w-6xl gap-10 px-6 pb-20 pt-16 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:px-10 lg:pb-28 lg:pt-24"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-primary">Clareza para cada escolha</p><h1 className="mt-5 max-w-3xl font-display text-5xl leading-[.98] tracking-tight sm:text-7xl">Seu dinheiro, com espaço para respirar.</h1><p className="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">Uma visão simples e humana das suas contas, metas e decisões financeiras — com seus dados protegidos por uma conta pessoal.</p><div className="mt-9 flex flex-wrap gap-3"><Link href="/sign-up" className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground">Começar agora</Link><Link href="/sign-in" className="rounded-full border border-border bg-card px-6 py-3 text-sm font-bold">Já tenho uma conta</Link></div></div><div className="rounded-[2rem] border border-border bg-card p-5 shadow-[0_24px_80px_-32px_rgba(38,62,57,.35)] sm:p-7"><div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground sm:p-8"><div className="flex items-center justify-between"><span className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-sidebar-primary">Visão geral</span><span className="rounded-full bg-sidebar-primary/20 px-3 py-1 text-xs text-sidebar-primary">Seu espaço</span></div><p className="mt-10 text-sm text-primary-foreground/60">Patrimônio líquido</p><p className="mt-2 font-mono-ui text-4xl">R$ 84.260</p><div className="mt-9 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-primary-foreground/10 p-4"><p className="text-xs text-primary-foreground/60">Economia</p><p className="mt-2 text-2xl font-semibold">37%</p></div><div className="rounded-2xl bg-primary-foreground/10 p-4"><p className="text-xs text-primary-foreground/60">Saúde</p><p className="mt-2 text-2xl font-semibold">82</p></div></div></div><div className="grid grid-cols-3 gap-3 pt-5 text-center text-xs text-muted-foreground"><span>Contas</span><span>Metas</span><span>Orçamento</span></div></div></section></main>;
+}
+
+function SignInPage() {
+  return <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8"><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div>;
+}
+
+function SignUpPage() {
+  return <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8"><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div>;
+}
+
+function HomeRedirect() {
+  return <><Show when="signed-in"><Redirect to="/app" /></Show><Show when="signed-out"><LandingPage /></Show></>;
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (previousUserId.current !== undefined && previousUserId.current !== userId) queryClient.clear();
+      previousUserId.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener]);
+  return null;
+}
+
+function UserPortal() {
+  return <><Show when="signed-in"><ErrorBoundary><Shell><Switch><Route path="/app" component={Dashboard} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/accounts" component={Accounts} /><Route path="/app/goals" component={Goals} /><Route path="/app/budget" component={Budget} /><Route path="/app/cards" component={Cards} /><Route path="/app/insights" component={Insights} /><Route path="/app/settings" component={Settings} /><Route path="/transactions" component={Transactions} /><Route path="/accounts" component={Accounts} /><Route path="/goals" component={Goals} /><Route path="/budget" component={Budget} /><Route path="/cards" component={Cards} /><Route path="/insights" component={Insights} /><Route path="/settings" component={Settings} /><Route component={NotFound} /></Switch></Shell></ErrorBoundary></Show><Show when="signed-out"><Redirect to="/" /></Show></>;
+}
+
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+  const stripBase = (path: string) => basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+  return <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} localization={{ signIn: { start: { title: 'Bem-vindo de volta', subtitle: 'Entre para acessar sua conta' } }, signUp: { start: { title: 'Crie sua conta', subtitle: 'Comece a organizar sua vida financeira' } } }} routerPush={(to) => setLocation(stripBase(to))} routerReplace={(to) => setLocation(stripBase(to), { replace: true })}><QueryClientProvider client={queryClient}><ClerkQueryClientCacheInvalidator /><Switch><Route path="/" component={HomeRedirect} /><Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/app/*?" component={UserPortal} /><Route path="/transactions" component={UserPortal} /><Route path="/accounts" component={UserPortal} /><Route path="/goals" component={UserPortal} /><Route path="/budget" component={UserPortal} /><Route path="/cards" component={UserPortal} /><Route path="/insights" component={UserPortal} /><Route path="/settings" component={UserPortal} /><Route component={NotFound} /></Switch></QueryClientProvider></ClerkProvider>;
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><Router /></QueryClientProvider>;
+  return <WouterRouter base={basePath}><ClerkProviderWithRoutes /></WouterRouter>;
 }
 
 export default App;
